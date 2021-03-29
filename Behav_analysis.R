@@ -814,7 +814,7 @@ ggsave("agegroup vs sex vs sumcontactsR2.png")
 # Sum Contacts R2 for R2_Result
 d1<- reshape2::dcast(bdat_l, Sex+Agegroup+sum_2_c + R1_Result~R2_Result)
 d1[is.na(d1)]<-"Missing"
-d1$Sum<- d1$Positve+d1$Negative
+d1$Sum<- d1$Positive +d1$Negative
 d1$Pos<- d1$Positive
 
 
@@ -854,34 +854,19 @@ ggsave("agegroup vs sex vs sumcontactsR2 vs R1Res.png")
 # merge data on socio economics and smoking to prevalence
 bdat<- merge.data.frame(bdat, koco_r2_dat[c("ind_id","NetIncome_monthly_1","smokestatus")],
                         by="ind_id")
+bdat_l<- merge.data.frame(bdat_l, koco_r2_dat[c("ind_id","NetIncome_monthly_1","smokestatus")],
+                        by="ind_id")
 
-d1<- reshape2::dcast(bdat,NetIncome_monthly_1+smokestatus~status)
-d1[is.na(d1)]<-"Missing"
-d1$Sum<- d1$`Never Positive`+d1$`Atleast once Positive`
-d1$Pos<- d1$`Atleast once Positive`
-
-fit2 <- brm(
-  Pos|trials(Sum)  ~ NetIncome_monthly_1*smokestatus, data =d1, 
-  chains = 3,warmup = 8000, 
-  iter = 20000,
-  control = list(adapt_delta = 0.95),family = binomial,seed=1234
-)
-mcmc_plot(fit2, 
-          type = "trace")
-
-
-d1<-cbind(d1,fitted(fit2))
-d1$prev_est<- d1$Estimate/d1$Sum
-d1$prev_2.5<- d1$Q2.5/d1$Sum
-d1$prev_97.5.5<- d1$Q97.5/d1$Sum
-d1$Risk<-"Smoking_Income"
-write.csv(d1,"smoking_income_prev.csv")
 
 bdat$NetIncome_monthly_2<- ifelse(bdat$NetIncome_monthly_1 =="<=2500"|
                                     bdat$NetIncome_monthly_1=="2500-4000","<4000",">=4000")
+bdat_l$NetIncome_monthly_2<- ifelse(bdat_l$NetIncome_monthly_1 =="<=2500"|
+                                    bdat_l$NetIncome_monthly_1=="2500-4000","<4000",">=4000")
 
 bdat$smokestatus1<- ifelse(bdat$smokestatus== "Current smoker","Current smoker","Exsmoker/Nonsmoker")
+bdat_l$smokestatus1<- ifelse(bdat_l$smokestatus== "Current smoker","Current smoker","Exsmoker/Nonsmoker")
 
+# Smoking and Income vs Overall Prevalence
 d1<- reshape2::dcast(bdat,NetIncome_monthly_2+smokestatus1~status)
 d1[is.na(d1)]<-"Missing"
 d1$Sum<- d1$`Never Positive`+d1$`Atleast once Positive`
@@ -917,6 +902,42 @@ ggplot(d1, aes(x=smokestatus1,y=prev_est))+
 
 ggsave("smoking vs householdincome.png")
 
+# Smoking vs Income on R2 result
+d1<- reshape2::dcast(bdat_l,NetIncome_monthly_2+smokestatus1 + R1_Result~R2_Result)
+d1[is.na(d1)]<-"Missing"
+d1$Sum<- d1$Positive+d1$Negative
+d1$Pos<- d1$Positive
+
+fit2 <- brm(
+  Pos|trials(Sum)  ~ NetIncome_monthly_2*smokestatus1 + R1_Result, data =d1, 
+  chains = 3,warmup = 8000, 
+  iter = 20000,
+  control = list(adapt_delta = 0.95),family = binomial,seed=1234
+)
+mcmc_plot(fit2, 
+          type = "trace")
+
+
+d1<-cbind(d1,fitted(fit2))
+d1$prev_est<- d1$Estimate/d1$Sum
+d1$prev_2.5<- d1$Q2.5/d1$Sum
+d1$prev_97.5.5<- d1$Q97.5/d1$Sum
+d1$Risk<-"Smoking_Income"
+write.csv(d1,"smoking_income_prev_R2.csv")
+
+d1$smokestatus1<- factor(d1$smokestatus1, levels = c("Exsmoker/Nonsmoker","Current smoker","Missing"),
+                         labels = c("Ex-smoker/\nNonsmoker","Current smoker","Missing"))
+d1$NetIncome_monthly_2<- factor(d1$NetIncome_monthly_2, levels = c("<4000",">=4000","Missing"))
+ggplot(d1, aes(x=smokestatus1,y=prev_est))+
+  geom_point(aes(colour=NetIncome_monthly_2),size=1.25,position = position_dodge(width = 0.9))+
+  geom_errorbar(aes(ymin = prev_2.5, ymax =prev_97.5.5, colour=NetIncome_monthly_2), position = position_dodge(width = 0.9),
+                width = 0.2)+
+  ylab("Prevalence")+xlab("Smoking status")+facet_grid(R1_Result~.,scales = "free")+
+  labs(colour="Monthly Household Income")+theme(legend.position="bottom")+
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1))
+
+ggsave("smoking vs householdincome vs R1_Result.png")
+
 d1<- reshape2::dcast(bdat,smokestatus+sum_1_c~status)
 d1[is.na(d1)]<-"Missing"
 d1$Sum<- d1$`Never Positive`+d1$`Atleast once Positive`
@@ -949,4 +970,39 @@ ggplot(d1, aes(x=smokestatus,y=prev_est))+
   scale_y_continuous(labels = scales::percent_format(accuracy = 1))
   
 ggsave("smoking vs sum of contacts.png")
+
+
+d1<- reshape2::dcast(bdat_l,smokestatus+sum_1_c + R1_Result~R2_Result)
+d1[is.na(d1)]<-"Missing"
+d1$Sum<- d1$Positive+d1$Negative
+d1$Pos<- d1$Positive
+
+fit2 <- brm(
+  Pos|trials(Sum)  ~ smokestatus*sum_1_c + R1_Result, data =d1, 
+  chains = 3,warmup = 8000, 
+  iter = 20000,
+  control = list(adapt_delta = 0.95),family = binomial,seed=1234
+)
+mcmc_plot(fit2, 
+          type = "trace")
+
+
+d1<-cbind(d1,fitted(fit2))
+d1$prev_est<- d1$Estimate/d1$Sum
+d1$prev_2.5<- d1$Q2.5/d1$Sum
+d1$prev_97.5.5<- d1$Q97.5/d1$Sum
+d1$Risk<-"Smoking_Contacts_R1"
+write.csv(d1,"smoking_contacts_prev_R2.csv")
+d1$smokestatus<- factor(d1$smokestatus, levels = c("Non smoker","Past smoker","Current smoker","Missing"))
+d1$sum_1_c<- factor(d1$sum_1_c, levels = c("Not High","High","Missing"))
+ggplot(d1, aes(x=smokestatus,y=prev_est))+
+  geom_point(aes(colour=sum_1_c),size=1.25,position = position_dodge(width = 0.9))+
+  geom_errorbar(aes(ymin = prev_2.5, ymax =prev_97.5.5, colour=sum_1_c), position = position_dodge(width = 0.9),
+                width = 0.2)+
+  ylab("Prevalence")+xlab("Smoking status")+facet_grid(R1_Result~., scales="free")+
+  labs(colour="Sum of Contacts (Summer)")+theme(legend.position="bottom")+
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1))
+
+ggsave("smoking vs sum of contacts vs R1_Result.png")
+
 
